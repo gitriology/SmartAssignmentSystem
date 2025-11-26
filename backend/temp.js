@@ -6,7 +6,7 @@
 
 // async function clearDB() {
 //   try {
-//     await mongoose.connect("mongodb+srv://shivanjana30_db_user:eJgcFvrTR0a48KWg@cluster0.ff8gbnu.mongodb.net/?appName=Cluster0");
+//     await mongoose.connect(process.env.MONGO_URL);
 //     console.log("Connected to DB");
 
 //     await User.deleteMany({});
