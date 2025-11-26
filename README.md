@@ -1,4 +1,4 @@
-Smart Assignment & Coding Evaluation Platform
+<b>Smart Assignment & Coding Evaluation Platform</b><br/>
 MERN Stack • Role-Based Web App • Judge0 Execution Engine
 
 A full-featured Assignment and Coding Evaluation Web Platform built using the MERN stack, designed for schools and colleges to streamline digital coursework, coding exercises, grading, and performance analytics. This project includes assignment creation, submission management, grading, student and teacher dashboards, coding problem management with Judge0 integration, and analytics.
