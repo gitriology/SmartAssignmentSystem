@@ -41,11 +41,7 @@ async function main() {
     process.exit(1); // Stop the server if DB connection fails
   }
 }
-main().then(()=>{
-    console.log("Connection established successfully!");
-}).catch((error)=>{
-    console.log(error);
-});
+main()
 
 app.listen(process.env.PORT,()=>{
     console.log(`Listening to port ${process.env.PORT}`);
