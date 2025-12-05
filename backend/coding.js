@@ -79,7 +79,7 @@ router.get("/submission/:id", requireAuth, async (req, res) => {
 
 
 // Get problem by id
-router.get("/problems/:id", requireAuth, async (req, res) => {
+router.get("/problem/:id", requireAuth, async (req, res) => {
   try {
     const problem = await CodingProblem.findById(req.params.id);
     if (!problem) return res.status(404).json({ message: "Problem not found" });
