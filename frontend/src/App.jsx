@@ -112,7 +112,7 @@ export default function App() {
 <Route
   path="/coding/solve/:id"
   element={
-    <ProtectedRoute role="Student">
+    <ProtectedRoute role={["Student", "Teacher"]}>
       <SolveProblem />
     </ProtectedRoute>
   }
