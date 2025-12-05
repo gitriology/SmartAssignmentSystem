@@ -104,12 +104,9 @@ router.post("/run", requireAuth, async (req, res) => {
 });
 
 // Submit code to be evaluated against all testcases and saved
+// Submit code to be evaluated against all testcases
 router.post("/problems/:id/submit", requireAuth, async (req, res) => {
   try {
-    if (req.user.role !== "Student") {
-      // you may allow teachers to test too — adjust
-      // return res.status(403).json({ message: "Students only" });
-    }
     const { code, language } = req.body;
     const problem = await CodingProblem.findById(req.params.id);
     if (!problem) return res.status(404).json({ message: "Problem not found" });
@@ -119,14 +116,20 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
 
     const details = [];
     let passed = 0;
-    // Evaluate sequentially (Judge0 has concurrency limits)
+
+    // Run against all testcases
     for (const tc of problem.testCases) {
-      const out = await runCode({ source_code: code, language_id, stdin: tc.input });
-      // Judge0 returns stdout or compile_output / stderr etc.
+      const out = await runCode({
+        source_code: code,
+        language_id,
+        stdin: tc.input
+      });
+
       const stdout = (out.stdout || "").toString().trim();
       const expected = tc.output.toString().trim();
       const ok = stdout === expected;
       if (ok) passed++;
+
       details.push({
         input: tc.input,
         expected,
@@ -136,6 +139,21 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
       });
     }
 
+    // ==========================================================
+    // TEACHER MODE → return results WITHOUT saving
+    // ==========================================================
+    if (req.user.role === "Teacher") {
+      return res.json({
+        mode: "teacher-preview",
+        passed,
+        total: problem.testCases.length,
+        details
+      });
+    }
+
+    // ==========================================================
+    // STUDENT MODE → Save to DB
+    // ==========================================================
     const submission = new CodingSubmission({
       student: req.user.id,
       problem: problem._id,
@@ -147,11 +165,39 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
     });
 
     await submission.save();
-    res.status(201).json({ message: "Submitted", passed, total: problem.testCases.length, submission });
+
+    res.status(201).json({
+      mode: "student-submit",
+      message: "Submitted",
+      passed,
+      total: problem.testCases.length,
+      submission
+    });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
+// Delete a problem (Teacher only)
+router.delete("/problems/:id", requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== "Teacher") {
+      return res.status(403).json({ message: "Only teachers can delete problems" });
+    }
+
+    const deleted = await CodingProblem.findByIdAndDelete(req.params.id);
+
+    if (!deleted) return res.status(404).json({ message: "Problem not found" });
+
+    res.json({ message: "Problem deleted successfully" });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 
 // List submissions for a problem (teacher)
 router.get("/problems/:id/submissions", requireAuth, async (req, res) => {
