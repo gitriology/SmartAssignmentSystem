@@ -140,14 +140,23 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
     }
 
     // ==========================================================
-    // TEACHER MODE → return results WITHOUT saving
+    // TEACHER MODE → return results WITHOUT saving, but wrap in `submission` for consistency
     // ==========================================================
     if (req.user.role === "Teacher") {
-      return res.json({
-        mode: "teacher-preview",
+      const teacherPreview = {
+        student: req.user.id,
+        problem: problem._id,
+        language,
+        code,
         passed,
         total: problem.testCases.length,
         details
+      };
+
+      return res.json({
+        mode: "teacher-preview",
+        message: "Teacher preview — not saved",
+        submission: teacherPreview
       });
     }
 
@@ -169,8 +178,6 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
     res.status(201).json({
       mode: "student-submit",
       message: "Submitted",
-      passed,
-      total: problem.testCases.length,
       submission
     });
 
@@ -178,6 +185,7 @@ router.post("/problems/:id/submit", requireAuth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 // Delete a problem (Teacher only)
 router.delete("/problems/:id", requireAuth, async (req, res) => {
