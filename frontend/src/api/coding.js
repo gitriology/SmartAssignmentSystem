@@ -10,3 +10,4 @@ export const submitCode = (id, data) => api.post(`/coding/problems/${id}/submit`
 
 export const getMyCodingSubmissions = () => api.get("/coding/my/submissions");
 export const getProblemSubmissions = (id) => api.get(`/coding/problems/${id}/submissions`);
+export const deleteProblem = (id) => api.delete(`/coding/problems/${id}`);
