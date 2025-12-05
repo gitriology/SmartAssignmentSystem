@@ -29,8 +29,17 @@ app.use(
 );
 
 
-async function main(){
-    await mongoose.connect(process.env.MONGO_URL);
+async function main() {
+  try {
+    await mongoose.connect(process.env.MONGO_URL, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log("MongoDB connection established successfully!");
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
+    process.exit(1); // Stop the server if DB connection fails
+  }
 }
 main().then(()=>{
     console.log("Connection established successfully!");
