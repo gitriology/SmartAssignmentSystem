@@ -19,7 +19,7 @@ import GradeSubmission from "./pages/Submissions/GradeSubmission";
 import TeacherAnalytics from "./pages/Analytics/TeacherAnalytics";
 import StudentAnalytics from "./pages/Analytics/StudentAnalytics";
 import StudentSubmissions from "./pages/Submissions/StudentsSubmissions";
-import ResubmitSubmission from "./pages/Submissions/ReSubmitSubmissions";
+import ResubmitSubmission from "./pages/Submissions/ResubmitSubmissions";
 import AllSubmissions from "./pages/Submissions/AllSubmissions";
 import UserProfile from "./pages/Users/UserProfile";
 import ProblemsList from "./pages/Coding/ProblemList";
