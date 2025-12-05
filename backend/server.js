@@ -27,14 +27,7 @@ app.use(
     credentials: true,
   })
 );
-app.options("*", cors({
-  origin: [
-    "http://localhost:5173",
-    "https://smart-assignment-system-lyart.vercel.app"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+
 
 async function main(){
     await mongoose.connect(process.env.MONGO_URL);
