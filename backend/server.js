@@ -23,7 +23,7 @@ app.use("/uploads", express.static("uploads"));
 app.use(
   cors({
     origin: ["http://localhost:5173","https://smart-assignment-system-lyart.vercel.app"],
-    methods: "GET,POST,PUT,DELETE",
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
