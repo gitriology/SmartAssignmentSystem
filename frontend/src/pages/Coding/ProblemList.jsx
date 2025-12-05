@@ -10,11 +10,15 @@ export default function ProblemsList() {
   const { user } = useContext(AuthContext);
 
   useEffect(() => {
-  getProblems().then((res) => {
-    console.log("API response:", res.data);
-    setProblems(res.data);
-  }).catch(err => console.error(err));
+  getProblems()
+    .then((res) => {
+      const arr = Array.isArray(res.data) ? res.data : [res.data];
+      console.log("Problems array:", arr);
+      setProblems(arr);
+    })
+    .catch((err) => console.error(err));
 }, []);
+
 
 
   return (
