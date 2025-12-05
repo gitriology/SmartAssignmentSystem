@@ -10,7 +10,7 @@ export default function ProblemsList() {
   const { user } = useContext(AuthContext);
 
   useEffect(() => {
-    getProblems().then(res => setProblems(res.data));
+    getProblems().then({res => setProblems(res.data);console.log("API response:", res.data);});
   }, []);
 
   return (
