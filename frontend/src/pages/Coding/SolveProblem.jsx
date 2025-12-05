@@ -11,6 +11,7 @@ import {
   Chip,
   Box,
   Divider,
+  TextField,
 } from "@mui/material";
 import Editor from "@monaco-editor/react";
 
@@ -20,10 +21,9 @@ export default function SolveProblem() {
   const [problem, setProblem] = useState(null);
   const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
+  const [customInput, setCustomInput] = useState(""); // ⭐ NEW
   const [language, setLanguage] = useState("python");
   const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
-
   const [submitResult, setSubmitResult] = useState(null);
 
   // Load Problem
@@ -34,43 +34,43 @@ export default function SolveProblem() {
         setProblem(res.data);
         setCode(res.data.starterCode?.[language] || "");
       })
-      .catch((err) => setApiError(err.response?.data?.message || "Error loading problem"))
       .finally(() => setLoading(false));
   }, [id, language]);
 
-  // RUN CODE
+  // RUN (LeetCode-style: Uses Custom Input)
   const run = async () => {
     try {
-      const res = await runCode({ code, language, stdin: "" });
+      const res = await runCode({
+        code,
+        language,
+        stdin: customInput, // ⭐ RUN uses custom input
+      });
+
       setOutput(res.data?.stdout || res.data?.stderr || "No output");
     } catch (err) {
       setOutput("Runtime Error: " + (err.response?.data?.message || err.message));
     }
   };
 
-  // SUBMIT CODE
+  // SUBMIT (Uses backend testcases)
   const submit = async () => {
-  try {
-    const res = await submitCode(id, { code, language });
+    try {
+      const res = await submitCode(id, { code, language });
+      const sub = res.data.submission;
 
-    // The backend returns submission inside res.data.submission
-    const sub = res.data.submission;
+      setSubmitResult({
+        passed: sub.passed,
+        total: sub.total,
+        details: sub.details,
+      });
 
-    setSubmitResult({
-      passed: sub.passed,
-      total: sub.total,
-      details: sub.details,
-    });
-
-    setOutput("Code submitted! Check testcase results below on submitting"); // keep raw output
-  } catch (err) {
-    setOutput("Submission Error: " + (err.response?.data?.message || err.message));
-  }
-};
-
+      setOutput("✔ Code Submitted. Scroll down to see results.");
+    } catch (err) {
+      setOutput("Submission Error: " + (err.response?.data?.message || err.message));
+    }
+  };
 
   if (loading) return <div>Loading...</div>;
-  if (apiError) return <div style={{ color: "red" }}>{apiError}</div>;
   if (!problem) return "Problem not found.";
 
   return (
@@ -91,30 +91,65 @@ export default function SolveProblem() {
           <MenuItem value="java">Java</MenuItem>
         </Select>
 
-        {/* Monaco Editor */}
+        {/* Editor */}
         <Editor
           height="400px"
           theme="vs-dark"
-          language={language}         // FIXED: correct way to update language dynamically
+          language={language}
           value={code}
           onChange={(v) => setCode(v)}
           options={{ fontSize: 14 }}
           sx={{ mt: 2 }}
         />
 
-        <Button variant="contained" sx={{ mt: 2, mr: 2 }} onClick={run}>
-          Run
-        </Button>
+        {/* LeetCode style bottom section */}
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            mt: 3,
+            flexDirection: { xs: "column", md: "row" },
+          }}
+        >
+          {/* Left: Custom Input */}
+          <Paper sx={{ flex: 1, p: 2 }}>
+            <Typography variant="h6">Custom Input</Typography>
+            <TextField
+              multiline
+              minRows={8}
+              fullWidth
+              sx={{ mt: 1 }}
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder={`Example:\n5`}
+            />
 
-        <Button variant="outlined" sx={{ mt: 2 }} onClick={submit}>
-          Submit
-        </Button>
+            <Button
+              variant="contained"
+              color="success"
+              sx={{ mt: 2, width: "100%" }}
+              onClick={run}
+            >
+              Run Code
+            </Button>
+          </Paper>
 
-        {/* Raw Output */}
-        <Paper sx={{ mt: 2, p: 2 }}>
-          <Typography variant="h6">Raw Output</Typography>
-          <pre>{output}</pre>
-        </Paper>
+          {/* Right: Output */}
+          <Paper sx={{ flex: 1, p: 2 }}>
+            <Typography variant="h6">Output</Typography>
+            <pre style={{ background: "#222", color: "white", padding: "10px" }}>
+              {output}
+            </pre>
+
+            <Button
+              variant="outlined"
+              sx={{ mt: 2, width: "100%" }}
+              onClick={submit}
+            >
+              Submit Code
+            </Button>
+          </Paper>
+        </Box>
 
         {/* Testcase Results */}
         {submitResult && submitResult.details && (
