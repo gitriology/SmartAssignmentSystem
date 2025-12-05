@@ -2,7 +2,7 @@
 import api from "./axiosInstance";
 
 export const getProblems = () => api.get("/coding/problems");
-export const getProblem = (id) => api.get(`/coding/problem/${id}`);
+export const getProblem = (id) => api.get(`/coding/problems/${id}`);
 export const createProblem = (data) => api.post("/coding/problems", data);
 
 export const runCode = (data) => api.post("/coding/run", data);
