@@ -10,8 +10,12 @@ export default function ProblemsList() {
   const { user } = useContext(AuthContext);
 
   useEffect(() => {
-    getProblems().then({res => setProblems(res.data);console.log("API response:", res.data);});
-  }, []);
+  getProblems().then((res) => {
+    console.log("API response:", res.data);
+    setProblems(res.data);
+  }).catch(err => console.error(err));
+}, []);
+
 
   return (
     <Container sx={{ mt: 3 }}>
