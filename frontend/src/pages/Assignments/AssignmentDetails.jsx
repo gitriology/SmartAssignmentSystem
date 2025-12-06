@@ -22,14 +22,7 @@ export default function AssignmentDetails() {
       <Paper sx={{ p: 3 }}>
         <Typography variant="h4">{assignment.title}</Typography>
         <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-          Subject: {assignment.subject} | Due: {new Date(assignment.dueDate).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-})}
+          Subject: {assignment.subject} | Due Date: ${new Date(savedAssignment.dueDate).toUTCString()}
         </Typography>
         <Divider sx={{ my: 2 }} />
         <Typography variant="body1" sx={{ mb: 2 }}>
