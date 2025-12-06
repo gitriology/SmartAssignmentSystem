@@ -17,6 +17,9 @@ const requireAuth = require("./middleware");
 const sendEmail = require("./mailer");
 const codingRoutes = require("./coding");
 
+const { uploadAssignmentsCloud } = require("./upload"); // replace local multer
+const { uploadSubmissionsCloud } = require("./upload");
+
 const app = express();
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
@@ -42,7 +45,6 @@ async function main() {
   }
 }
 main()
-
 app.listen(process.env.PORT,()=>{
     console.log(`Listening to port ${process.env.PORT}`);
 })
@@ -190,103 +192,82 @@ app.get("/sections", async (req, res) => {
 });
 
 //Assignment routes
-const storageAssignment = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/assignments/");
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/jpg"
-  ];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only PDF or image files are allowed!"), false);
-  }
-};
-const uploadAssignments = multer({
-  storage: storageAssignment,
-  fileFilter: fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } 
-});
-app.post("/assignments/create", uploadAssignments.array("attachments", 5), requireAuth, async (req, res) => {
-  try {
-    if(req.user.role=='Teacher'){
-        const { title, description, dueDate, rubric, status, subject } = req.body;
-        const attachments = req.files?.map(file => {
-        const relPath = `/uploads/assignments/${file.filename}`;
-        return {
-          filename: file.filename,
-          url: relPath, // stored path
-          fullUrl: makeFileUrl(req, relPath), // complete URL for frontend
-          mimetype: file.mimetype,
-          size: file.size
-        };
-      }) || [];
-        let parsedRubric = [];
-        if (rubric) {
-          try {
-            parsedRubric = typeof rubric === "string" ? JSON.parse(rubric) : rubric;
-            parsedRubric = parsedRubric.map(r => ({
-              criteria: r.criteria,
-              marks: Number(r.marks) || 0, 
-            }));
-          } catch (err) {
-            console.log("Rubric parse error:", err);
-          }
+app.post(
+  "/assignments/create",
+  requireAuth,
+  uploadAssignmentsCloud.array("attachments", 5), // Cloudinary upload
+  async (req, res) => {
+    try {
+      if (req.user.role !== "Teacher")
+        return res.status(403).json({ message: "Unauthorized" });
+
+      const { title, description, dueDate, rubric, status, subject } = req.body;
+
+      // Map uploaded files
+      const attachments = req.files?.map((file) => ({
+        filename: file.originalname,
+        url: file.path, // Cloudinary URL
+        mimetype: file.mimetype,
+        size: file.size,
+      })) || [];
+
+      // Parse rubric if sent as string
+      let parsedRubric = [];
+      if (rubric) {
+        try {
+          parsedRubric =
+            typeof rubric === "string" ? JSON.parse(rubric) : rubric;
+          parsedRubric = parsedRubric.map((r) => ({
+            criteria: r.criteria,
+            marks: Number(r.marks) || 0,
+          }));
+        } catch (err) {
+          console.log("Rubric parse error:", err);
         }
-        const newAssignment = new Assignment({
+      }
+
+      console.log("debug:", req.files);
+
+      const newAssignment = new Assignment({
         title,
         description,
         dueDate,
-        createdBy:req.user.id,
+        createdBy: req.user.id,
         section: req.user.section,
         attachments,
-        subject: subject || req.user.subject,
         rubric: parsedRubric,
-        status: status || "active", 
+        subject: subject || req.user.subject,
+        status: status || "active",
         createdAt: Date.now(),
-        updatedAt: Date.now()
-        });
+        updatedAt: Date.now(),
+      });
 
-        const savedAssignment=await newAssignment.save();
-        if (savedAssignment) {
-        const sectionStudents = await User.find({ 
-          section: req.user.section, 
-          role: "Student" 
-        });
+      const savedAssignment = await newAssignment.save();
 
-        const emails = sectionStudents.map(s => s.email);
+      // Notify students
+      const sectionStudents = await User.find({
+        section: req.user.section,
+        role: "Student",
+      });
+      const emails = sectionStudents.map((s) => s.email);
 
-        if (emails.length > 0) {
-          const html = `
-            <h3>New Assignment Posted: ${savedAssignment.title}</h3>
-            <p>${savedAssignment.description || ""}</p>
-            <p>Due Date: ${new Date(savedAssignment.dueDate).toLocaleString()}</p>
-            <p>Please check your dashboard to submit.</p>
-          `;
-          sendEmail(emails.join(","), "New Assignment Posted", html);
-        }
+      if (emails.length > 0) {
+        const html = `
+          <h3>New Assignment Posted: ${savedAssignment.title}</h3>
+          <p>${savedAssignment.description || ""}</p>
+          <p>Due Date: ${new Date(savedAssignment.dueDate).toLocaleString()}</p>
+          <p>Please check your dashboard to submit.</p>
+        `;
+        sendEmail(emails.join(","), "New Assignment Posted", html);
       }
-        res.status(201).json({
-        message: "Assignment created successfully!",
-        data: savedAssignment
-        });
-    }else{
-        res.status(403).json({ message: "Invalid role" });
+
+      res.status(201).json(savedAssignment);
+    } catch (err) {
+      console.error(err);
+      res.status(400).json({ message: err.message });
     }
-  } catch (err) {
-    res.status(400).json({ message: `Error Occurred: ${err.message}` });
   }
-});
+);
 
 app.get("/assignments/all", requireAuth, async (req,res)=>{
     try{
@@ -345,7 +326,7 @@ app.get("/assignments/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.put("/assignments/edit/:id", uploadAssignments.array("attachments", 5), requireAuth,async (req,res)=>{
+app.put("/assignments/edit/:id", uploadAssignmentsCloud.array("attachments", 5), requireAuth,async (req,res)=>{
   try {
     if(req.user.role=='Teacher'){
         const assignment= await Assignment.findById(req.params.id);
@@ -360,7 +341,7 @@ app.put("/assignments/edit/:id", uploadAssignments.array("attachments", 5), requ
       if (req.files && req.files.length > 0) {
         attachments = req.files.map(file => ({
           filename: file.filename,
-          url: `/uploads/assignments/${file.filename}`,
+          url: file.path,
           mimetype: file.mimetype,
           size: file.size,
         }));
