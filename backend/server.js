@@ -258,7 +258,7 @@ app.post(
           <p>Due Date: ${new Date(savedAssignment.dueDate).toLocaleString()}</p>
           <p>Please check your dashboard to submit.</p>
         `;
-        sendEmail(emails.join(","), "New Assignment Posted", html);
+        // sendEmail(emails.join(","), "New Assignment Posted", html);
       }
 
       res.status(201).json(savedAssignment);
@@ -451,7 +451,7 @@ app.post(
           <p>Assignment: ${assignment.title}</p>
           <p>Submitted At: ${new Date().toLocaleString()}</p>
         `;
-        sendEmail(teacher.email, `New Submission for ${assignment.title}`, html);
+        // sendEmail(teacher.email, `New Submission for ${assignment.title}`, html);
       }
 
       res.status(201).json({
@@ -626,7 +626,7 @@ app.put(
           <h3>Your submission has been resubmitted</h3>
           <p>Assignment: ${submission.assignment.title}</p>
         `;
-        sendEmail(student.email, `Your submission has been resubmitted`, html);
+        // sendEmail(student.email, `Your submission has been resubmitted`, html);
       }
 
       res.status(200).json({ message: "Resubmission successful.", submission });
