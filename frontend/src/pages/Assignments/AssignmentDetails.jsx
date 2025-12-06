@@ -1,15 +1,8 @@
+// src/pages/Assignments/AssignmentDetails.jsx
 import React, { useEffect, useState } from "react";
-import {
-  Container,
-  Paper,
-  Typography,
-  Button,
-  Box,
-  Divider,
-} from "@mui/material";
-import { getAssignment } from "../../api/assignments";
-import api from "../../api/axiosInstance";
+import { Container, Paper, Typography, Box, Divider, Button } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
+import api from "../../api/axiosInstance";
 
 export default function AssignmentDetails() {
   const { id } = useParams();
@@ -17,153 +10,57 @@ export default function AssignmentDetails() {
   const nav = useNavigate();
 
   useEffect(() => {
-    getAssignment(id)
-      .then((res) => setAssignment(res.data))
-      .catch((err) =>
-        alert(err.response?.data?.message || "Error loading assignment")
-      );
+    api.get(`/assignments/${id}`)
+      .then(res => setAssignment(res.data))
+      .catch(err => alert(err.response?.data?.message || "Error fetching assignment"));
   }, [id]);
 
   if (!assignment) return <div>Loading...</div>;
 
-  // Fetch submissions and navigate
-  const handleViewSubmissions = async () => {
-    try {
-      const res = await api.get(`/assignments/${id}/allSubmissions`);
-
-      if (!res.data || res.data.length === 0) {
-        alert("No submissions yet for this assignment.");
-        return;
-      }
-
-      // Navigate to a submissions page with the data
-      nav(`/assignments/${id}/allSubmissions`, { state: { submissions: res.data } });
-    } catch (err) {
-      alert(
-        err.response?.data?.message ||
-          "Error fetching submissions. You may not be authorized."
-      );
-    }
-  };
-
   return (
     <Container sx={{ mt: 3 }}>
       <Paper sx={{ p: 3 }}>
-        {/* Title */}
-        <Typography variant="h4" fontWeight={600}>
-          {assignment.title}
+        <Typography variant="h4">{assignment.title}</Typography>
+        <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+          Subject: {assignment.subject} | Due: {new Date(assignment.dueDate).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+})}
         </Typography>
-
-        {/* Description */}
-        <Typography variant="subtitle1" sx={{ mt: 1 }}>
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="body1" sx={{ mb: 2 }}>
           {assignment.description}
         </Typography>
 
-        {/* Due Date */}
-        <Box sx={{ mt: 2 }}>
-          <Typography fontWeight={500}>
-            <strong>Due Date:</strong>{" "}
-            {new Date(assignment.dueDate).toLocaleString()}
-          </Typography>
-        </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Attachments */}
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Attachments
-        </Typography>
-
-        {assignment.attachments && assignment.attachments.length > 0 ? (
-          assignment.attachments.map((file, idx) => (
-            <Box
-              key={idx}
-              sx={{
-                mb: 1,
-                p: 1,
-                border: "1px solid #ccc",
-                borderRadius: 1,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Typography>{file.filename}</Typography>
-
-              <Button
-                variant="outlined"
-                onClick={() =>
-                  window.open(file.fullUrl || `http://localhost:3000${file.url}`, "_blank")
-                }
-              >
-                View File
-              </Button>
-            </Box>
-          ))
-        ) : (
-          <Typography>No files attached</Typography>
-        )}
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Rubric */}
-        {assignment.rubric && assignment.rubric.length > 0 && (
+        {assignment.attachments && assignment.attachments.length > 0 && (
           <>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Rubric
-            </Typography>
-
-            {assignment.rubric.map((r, i) => (
-              <Box
-                key={i}
-                sx={{
-                  p: 1,
-                  mb: 1,
-                  border: "1px solid #ddd",
-                  borderRadius: 1,
-                }}
-              >
-                <Typography>
-                  <strong>Criteria:</strong> {r.criteria}
-                </Typography>
-                <Typography>
-                  <strong>Max Marks:</strong> {r.marks ?? "N/A"}
-                </Typography>
-              </Box>
-            ))}
-
-            <Divider sx={{ my: 2 }} />
+            <Typography variant="h6">Attachments:</Typography>
+            <ul>
+              {assignment.attachments.map((file, i) => (
+                <li key={i}>
+                  <a href={file.url} target="_blank" rel="noreferrer">{file.filename}</a> ({(file.size/1024).toFixed(1)} KB)
+                </li>
+              ))}
+            </ul>
           </>
         )}
 
-        {/* Buttons */}
-        <Box sx={{ mt: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>
-          {assignment.canEdit && (
-            <Button
-              variant="contained"
-              onClick={() =>
-                nav(`/teacher/assignments/${assignment._id}/edit`)
-              }
-            >
-              Edit Assignment
-            </Button>
-          )}
+        {assignment.rubric && assignment.rubric.length > 0 && (
+          <>
+            <Typography variant="h6" sx={{ mt: 2 }}>Rubric:</Typography>
+            <ul>
+              {assignment.rubric.map((r, i) => (
+                <li key={i}>{r.criteria} — {r.marks} marks</li>
+              ))}
+            </ul>
+          </>
+        )}
 
-          <Button
-            variant="outlined"
-            onClick={handleViewSubmissions} // Updated
-          >
-            View Submissions
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={() => nav("/teacher/dashboard")}
-          >
-            Back to Dashboard
-          </Button>
-        </Box>
+        <Button variant="outlined" sx={{ mt: 2 }} onClick={() => nav(-1)}>Back</Button>
       </Paper>
     </Container>
   );
