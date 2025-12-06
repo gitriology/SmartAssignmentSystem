@@ -32,7 +32,7 @@ export default function Register() {
   useEffect(() => {
     api
       .get("/sections")
-      .then((res) => setSections(res.data))
+      .then((res) => {setSections(res.data);console.log(res.data;})
       .catch(() => setSections([]));
   }, []);
 
