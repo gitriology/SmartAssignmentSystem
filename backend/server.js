@@ -401,68 +401,49 @@ app.delete("/assignments/delete/:id", requireAuth, async (req, res) => {
 });
 
 //Submissions Routes
-const storageSubmissions = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/submissions/"); 
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const submissionFileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/jpg"
-  ];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only PDF or image files are allowed!"), false);
-  }
-};
-const uploadSubmission = multer({
-  storage: storageSubmissions,
-  fileFilter: submissionFileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // Max 10MB per file
-});
+// Submissions Routes using Cloudinary
+app.post(
+  "/assignments/:id/submissions",
+  uploadSubmissionsCloud.array("files", 5), // Cloudinary upload
+  requireAuth,
+  async (req, res) => {
+    try {
+      if (req.user.role !== "Student") {
+        return res.status(403).json({ message: "Access denied. Students only." });
+      }
 
-app.post("/assignments/:id/submissions", uploadSubmission.array("files", 5), requireAuth, async (req, res) => {
-  try {
-    if (req.user.role !== "Student") {
-      return res.status(403).json({ message: "Access denied. Students only." });
-    }
-    const assignment = await Assignment.findById(req.params.id);
-    if (!assignment) {
-      return res.status(404).json({ message: "Assignment not found" });
-    }
-    if (assignment.section.toString() !== req.user.section.toString()) {
+      const assignment = await Assignment.findById(req.params.id);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      if (assignment.section.toString() !== req.user.section.toString()) {
         return res.status(403).json({ message: "This assignment does not belong to your section." });
-    }
-    const isLate = new Date() > new Date(assignment.dueDate);
-    const files = req.files.map(file => ({
-      filename: file.filename,
-      url: `/uploads/submissions/${file.filename}`,
-      mimetype: file.mimetype,
-      size: file.size
-    }));
-    const newSubmission = new Submission({
-      assignment: assignment._id,
-      student: req.user.id,
-      attachments:files,
-      submittedAt: new Date(),
-      status: "submitted",
-      isLate: isLate, 
-    });
-    await newSubmission.save();
-    // Get teacher of this assignment
-      const teacher = await User.findOne({ 
-        _id: assignment.createdBy, 
-        role: "Teacher" 
+      }
+
+      const isLate = new Date() > new Date(assignment.dueDate);
+
+      // Map uploaded Cloudinary files
+      const files = req.files.map((file) => ({
+        filename: file.originalname,
+        url: file.path, // Cloudinary URL
+        mimetype: file.mimetype,
+        size: file.size,
+      }));
+
+      const newSubmission = new Submission({
+        assignment: assignment._id,
+        student: req.user.id,
+        attachments: files,
+        submittedAt: new Date(),
+        status: "submitted",
+        isLate: isLate,
       });
 
+      await newSubmission.save();
+
+      // Notify teacher
+      const teacher = await User.findOne({ _id: assignment.createdBy, role: "Teacher" });
       if (teacher) {
         const html = `
           <h3>New Submission Received</h3>
@@ -473,174 +454,187 @@ app.post("/assignments/:id/submissions", uploadSubmission.array("files", 5), req
         sendEmail(teacher.email, `New Submission for ${assignment.title}`, html);
       }
 
-    res.status(201).json({
-      message: isLate ? "Submitted (Late)" : "Submitted (On Time)",
-      data: newSubmission
-    });
+      res.status(201).json({
+        message: isLate ? "Submitted (Late)" : "Submitted (On Time)",
+        data: newSubmission,
+      });
+    } catch (err) {
+      res.status(400).json({ message: `Error: ${err.message}` });
+    }
+  }
+);
+
+app.get("/assignments/:id/allSubmissions", requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== "Teacher") {
+      return res.status(403).json({ message: "Access denied. Teachers only." });
+    }
+    const assignmentId = req.params.id;
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) return res.status(404).json({ message: "Assignment not found" });
+
+    if (assignment.subject !== req.user.subject || assignment.section.toString() !== req.user.section.toString()) {
+      return res.status(403).json({ message: "Not authorized for this assignment." });
+    }
+
+    const submissions = await Submission.find({ assignment: assignmentId })
+      .populate("assignment")
+      .populate("student");
+
+    res.status(200).json(submissions);
   } catch (err) {
     res.status(400).json({ message: `Error: ${err.message}` });
   }
 });
-app.get("/assignments/:id/allSubmissions",requireAuth,async (req,res)=>{
-  try{
-    if(req.user.role!=="Teacher"){
-      return res.status(403).json({ message: "Access denied. Teachers only." });
-    }
-    const assignmentId=req.params.id;
-    const assignment = await Assignment.findById(req.params.id);
-    if (!assignment)
-      return res.status(404).json({ message: "Assignment not found" });
-    if (assignment.subject !== req.user.subject || assignment.section.toString() !== req.user.section.toString()
-    ) {
-      return res.status(403).json({ message: "Not authorized for this assignment." });
-    }
-    const submissions = await Submission.find({assignment:assignmentId}).populate("assignment").populate("student");
-    res.status(200).json(submissions);
-  }catch (err) {
-    res.status(400).json({ message: `Error: ${err.message}` });
-  }
-})
+
 app.get("/submissions/my", requireAuth, async (req, res) => {
   try {
-    const id = new mongoose.Types.ObjectId(req.user.id);
-    if(req.user.role!=="Student"){
+    if (req.user.role !== "Student") {
       return res.status(403).json({ message: "Access denied. Students only." });
     }
-    const submissions = await Submission.find({ student: id }).populate("assignment");
+
+    const studentId = new mongoose.Types.ObjectId(req.user.id);
+    const submissions = await Submission.find({ student: studentId }).populate("assignment");
     res.status(200).json(submissions);
   } catch (err) {
     res.status(400).json({ message: `Error Occurred: ${err.message}` });
   }
 });
-app.get("/submissions/:id",requireAuth, async (req,res)=>{
-  try{
-    const id=req.params.id;
+
+app.get("/submissions/:id", requireAuth, async (req, res) => {
+  try {
+    const id = req.params.id;
     const submission = await Submission.findById(id).populate("assignment");
-    if(!submission){
-      return res.status(404).json({ message: "Submission not found." });
-    }
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+
     const assignment = submission.assignment;
+
     if (req.user.role === "Student") {
       if (submission.student._id.toString() !== req.user.id) {
         return res.status(403).json({ message: "Not your submission." });
       }
     }
+
     if (req.user.role === "Teacher") {
       if (assignment.subject !== req.user.subject || assignment.section.toString() !== req.user.section.toString()) {
         return res.status(403).json({ message: "Not authorized for this submission." });
       }
     }
-    res.status(200).json(submission);
-  }catch (err) {
-    res.status(400).json({ message: `Error Occurred: ${err.message}` });
-  }
-})
-app.put("/submissions/:id/grade", requireAuth,async(req,res)=>{
-  try{
-      if(req.user.role!=='Teacher'){
-      return res.status(403).json({ message: "Access denied. Teachers only." });
-    }
-    const id = req.params.id;
-    const submission = await Submission.findById(req.params.id)
-      .populate("assignment");
-    if(!submission){
-        return res.status(404).json({ message: "Submission not found." });
-    }
-    const assignment = submission.assignment;
-    if (assignment.subject !== req.user.subject || assignment.section.toString() !== req.user.section.toString()) {
-      return res.status(403).json({
-        message: "Not authorized to grade this submission."
-      });
-    }
-    if (submission.status === "graded") {
-      return res.status(400).json({ message: "This submission is already graded." });
-    }
-    const { marks, feedback } = req.body;
-    if (marks) submission.marks = marks;
-    if (feedback !== undefined) submission.feedback = feedback;
-    submission.gradedBy = req.user.id;
-    submission.gradedAt = new Date();
-    submission.status = "graded";
-    await submission.save();
-    // After submission.save()
-      const student = await User.findById(submission.student);
-      if (student) {
-        const action = submission.status === "graded" ? "graded" : "resubmitted";
-        const html = `
-          <h3>Your submission has been ${action}</h3>
-          <p>Assignment: ${submission.assignment.title}</p>
-          <p>${submission.status === "graded" ? `Marks: ${submission.marks.total}` : ""}</p>
-          <p>${submission.feedback ? `Feedback: ${submission.feedback}` : ""}</p>
-        `;
-        sendEmail(student.email, `Your submission has been ${action}`, html);
-      }
 
-    res.status(200).json({
-      message: "Submission graded successfully.",
-    submission
-    });
-  }catch (err) {
-    res.status(400).json({ message: `Error Occurred: ${err.message}` });
-  }
-});
-app.put("/submissions/:id/resubmit", requireAuth, uploadSubmission.array("attachments"), async (req, res) => {
-  try {
-    if (req.user.role !== "Student") {
-      return res.status(403).json({ message: "Access denied. Students only." });
-    }
-    const submission = await Submission.findById(req.params.id).populate("assignment");
-    if (!submission) {
-      return res.status(404).json({ message: "Submission not found." });
-    }
-    if (submission.student.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Not authorized to modify this submission." });
-    }
-    const assignment = submission.assignment;
-    if (assignment.section.toString() !== req.user.section.toString()) {
-        return res
-          .status(403)
-          .json({ message: "You cannot resubmit for another section." });
-    }
-    if (new Date() > assignment.dueDate) {
-      return res.status(400).json({ message: "Deadline has passed. Resubmission not allowed." });
-    }    
-    if (req.files && req.files.length > 0) {
-      const newAttachments = req.files.map((file) => ({
-        filename: file.filename,
-        url: `/uploads/submissions/${file.filename}`,
-        mimetype: file.mimetype,
-        size: file.size,
-      }));
-      submission.attachments.push(...newAttachments);
-    }
-    submission.status = "resubmitted";
-    submission.resubmittedAt = new Date();
-    submission.isLate = false;
-    submission.gradedBy = undefined;
-    submission.gradedAt = undefined;
-    submission.marks = { total: 0, perCriteria: [] };
-    submission.feedback = "";
-    await submission.save();
-    // After submission.save()
-    const student = await User.findById(submission.student);
-    if (student) {
-      const action = submission.status === "graded" ? "graded" : "resubmitted";
-      const html = `
-        <h3>Your submission has been ${action}</h3>
-        <p>Assignment: ${submission.assignment.title}</p>
-        <p>${submission.status === "graded" ? `Marks: ${submission.marks.total}` : ""}</p>
-        <p>${submission.feedback ? `Feedback: ${submission.feedback}` : ""}</p>
-      `;
-      sendEmail(student.email, `Your submission has been ${action}`, html);
-    }
-    res.status(200).json({
-      message: "Resubmission successful.",
-      submission,
-    });
+    res.status(200).json(submission);
   } catch (err) {
     res.status(400).json({ message: `Error Occurred: ${err.message}` });
   }
 });
+
+app.put("/submissions/:id/grade", requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== "Teacher") {
+      return res.status(403).json({ message: "Access denied. Teachers only." });
+    }
+
+    const submission = await Submission.findById(req.params.id).populate("assignment");
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+
+    const assignment = submission.assignment;
+    if (assignment.subject !== req.user.subject || assignment.section.toString() !== req.user.section.toString()) {
+      return res.status(403).json({ message: "Not authorized to grade this submission." });
+    }
+
+    if (submission.status === "graded") {
+      return res.status(400).json({ message: "This submission is already graded." });
+    }
+
+    const { marks, feedback } = req.body;
+    if (marks) submission.marks = marks;
+    if (feedback !== undefined) submission.feedback = feedback;
+
+    submission.gradedBy = req.user.id;
+    submission.gradedAt = new Date();
+    submission.status = "graded";
+
+    await submission.save();
+
+    // Notify student
+    const student = await User.findById(submission.student);
+    if (student) {
+      const html = `
+        <h3>Your submission has been graded</h3>
+        <p>Assignment: ${submission.assignment.title}</p>
+        <p>Marks: ${submission.marks.total || 0}</p>
+        <p>${submission.feedback ? `Feedback: ${submission.feedback}` : ""}</p>
+      `;
+      sendEmail(student.email, `Your submission has been graded`, html);
+    }
+
+    res.status(200).json({ message: "Submission graded successfully.", submission });
+  } catch (err) {
+    res.status(400).json({ message: `Error Occurred: ${err.message}` });
+  }
+});
+
+app.put(
+  "/submissions/:id/resubmit",
+  requireAuth,
+  uploadSubmissionsCloud.array("attachments"), // Cloudinary upload
+  async (req, res) => {
+    try {
+      if (req.user.role !== "Student") {
+        return res.status(403).json({ message: "Access denied. Students only." });
+      }
+
+      const submission = await Submission.findById(req.params.id).populate("assignment");
+      if (!submission) return res.status(404).json({ message: "Submission not found." });
+
+      if (submission.student.toString() !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to modify this submission." });
+      }
+
+      const assignment = submission.assignment;
+      if (assignment.section.toString() !== req.user.section.toString()) {
+        return res.status(403).json({ message: "You cannot resubmit for another section." });
+      }
+
+      if (new Date() > assignment.dueDate) {
+        return res.status(400).json({ message: "Deadline has passed. Resubmission not allowed." });
+      }
+
+      if (req.files && req.files.length > 0) {
+        const newAttachments = req.files.map((file) => ({
+          filename: file.originalname,
+          url: file.path, // Cloudinary URL
+          mimetype: file.mimetype,
+          size: file.size,
+        }));
+        submission.attachments.push(...newAttachments);
+      }
+
+      submission.status = "resubmitted";
+      submission.resubmittedAt = new Date();
+      submission.isLate = false;
+      submission.gradedBy = undefined;
+      submission.gradedAt = undefined;
+      submission.marks = { total: 0, perCriteria: [] };
+      submission.feedback = "";
+
+      await submission.save();
+
+      // Notify student
+      const student = await User.findById(submission.student);
+      if (student) {
+        const html = `
+          <h3>Your submission has been resubmitted</h3>
+          <p>Assignment: ${submission.assignment.title}</p>
+        `;
+        sendEmail(student.email, `Your submission has been resubmitted`, html);
+      }
+
+      res.status(200).json({ message: "Resubmission successful.", submission });
+    } catch (err) {
+      res.status(400).json({ message: `Error Occurred: ${err.message}` });
+    }
+  }
+);
 
 //dashboard routes
 app.get("/teacher/dashboard", requireAuth, async (req, res) => {
